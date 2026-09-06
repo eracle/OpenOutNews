@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "openoutnews"
+version = "0.1.0"
+description = "Explore/exploit news curation for a newsletter: fetch candidates, learn a reader's taste, print a CSV."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "GPL-3.0-or-later"
+authors = [{ name = "OpenOutNews", email = "hello@openoutreach.app" }]
+keywords = [
+    "newsletter",
+    "active-learning",
+    "explore-exploit",
+    "curation",
+    "self-hosted",
+    "open-source",
+]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Communications :: Email",
+]
+
+dependencies = [
+    "fastembed>=0.4,<1",
+    "scikit-learn>=1.4,<2",
+    "scipy>=1.11,<2",
+    "numpy>=1.26,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-mock>=3.14",
+]
+
+[project.scripts]
+outnews = "openoutnews.__main__:main"
+
+[project.urls]
+Homepage = "https://openoutreach.app"
+Source = "https://github.com/eracle/OpenOutNews"
+Issues = "https://github.com/eracle/OpenOutNews/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["openoutnews"]
