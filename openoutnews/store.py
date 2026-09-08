@@ -27,9 +27,17 @@ CREATE TABLE IF NOT EXISTS articles (
     embedding BLOB,
     label INTEGER,
     fetched_at TEXT NOT NULL,
-    sent_at TEXT
+    sent_at TEXT,
+    absorbed_into TEXT
 );
 """
+
+
+def _migrate(conn):
+    """Add columns introduced after a store already existed on disk."""
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(articles)")}
+    if "absorbed_into" not in columns:
+        conn.execute("ALTER TABLE articles ADD COLUMN absorbed_into TEXT")
 
 
 def article_id(url: str) -> str:
@@ -44,6 +52,7 @@ def connect():
     conn = sqlite3.connect(path)
     try:
         conn.execute(SCHEMA)
+        _migrate(conn)
         yield conn
         conn.commit()
     finally:
@@ -106,7 +115,8 @@ def labeled_arrays(conn) -> tuple[np.ndarray, np.ndarray]:
 
 
 def unsent_candidates(conn) -> list[sqlite3.Row]:
-    """Fetched, embedded, never sent — the pool ``find`` picks from.
+    """Fetched, embedded, never sent, not absorbed into another candidate's
+    cluster — the pool ``find`` picks from.
 
     A candidate stays eligible whether or not it has since been labelled: a
     label comes from a *sent* article the reader reacted to, so an unsent row
@@ -115,5 +125,24 @@ def unsent_candidates(conn) -> list[sqlite3.Row]:
     conn.row_factory = sqlite3.Row
     return conn.execute(
         "SELECT * FROM articles WHERE embedding IS NOT NULL AND sent_at IS NULL "
-        "ORDER BY published_at DESC"
+        "AND absorbed_into IS NULL ORDER BY published_at DESC"
     ).fetchall()
+
+
+def absorb_candidates(conn, clusters: dict[str, list[str]]):
+    """Mark every non-representative member of a syndication cluster.
+
+    ``clusters`` is ``{representative_id: [absorbed_id, ...]}`` from
+    ``openoutnews.dedup.cluster_representatives``. An absorbed row stays in
+    the store (so a re-fetch of the same story isn't re-clustered for no
+    benefit) but drops out of ``unsent_candidates`` for good — the
+    representative is what the qualifier scores and ``label`` accepts.
+    """
+    pairs = [
+        (representative, absorbed_id)
+        for representative, absorbed_ids in clusters.items()
+        for absorbed_id in absorbed_ids
+    ]
+    conn.executemany(
+        "UPDATE articles SET absorbed_into = ? WHERE id = ?", pairs
+    )

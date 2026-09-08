@@ -75,6 +75,21 @@ def test_labeled_arrays_is_empty_with_no_labels(conn):
     assert y.shape == (0,)
 
 
+def test_absorb_candidates_excludes_absorbed_rows_from_unsent_candidates(conn):
+    for i, url in enumerate(["https://example.com/rep", "https://example.com/dup"]):
+        store.upsert_candidate(conn, title=str(i), url=url, published_at="2026-09-01", summary="")
+        store.set_embedding(conn, store.article_id(url), np.zeros(4, dtype=np.float32))
+    rep_id = store.article_id("https://example.com/rep")
+    dup_id = store.article_id("https://example.com/dup")
+
+    assert len(store.unsent_candidates(conn)) == 2
+    store.absorb_candidates(conn, {rep_id: [dup_id]})
+
+    remaining = store.unsent_candidates(conn)
+    assert [r["id"] for r in remaining] == [rep_id]
+    assert store.get_row(conn, dup_id)["absorbed_into"] == rep_id
+
+
 def test_labeled_arrays_collects_every_labelled_embedded_row(conn):
     for i, verdict in enumerate([1, 0]):
         url = f"https://example.com/{i}"

@@ -19,7 +19,7 @@ import sys
 
 import numpy as np
 
-from openoutnews import conf, fetch, store
+from openoutnews import conf, dedup, fetch, store
 from openoutnews.ml import embeddings
 from openoutnews.ml.qualifier import EngagementQualifier
 
@@ -65,6 +65,10 @@ def _fetch_and_embed(conn) -> None:
 def cmd_find(n: int) -> int:
     with store.connect() as conn:
         _fetch_and_embed(conn)
+
+        clusters = dedup.cluster_representatives(store.unsent_candidates(conn))
+        if clusters:
+            store.absorb_candidates(conn, clusters)
 
         candidates = store.unsent_candidates(conn)
         if not candidates:
