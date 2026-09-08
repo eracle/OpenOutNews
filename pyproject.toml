@@ -35,6 +35,8 @@ dependencies = [
     "scikit-learn>=1.4,<2",
     "scipy>=1.11,<2",
     "numpy>=1.26,<3",
+    # TODO: switch to a normal PyPI version pin once openoutlearn has a first release.
+    "openoutlearn @ git+https://github.com/eracle/OpenOutLearn.git@main",
 ]
 
 [project.optional-dependencies]
@@ -42,6 +44,11 @@ dev = [
     "pytest>=8",
     "pytest-mock>=3.14",
 ]
+
+[tool.hatch.metadata]
+# TEMPORARY: openoutlearn is pinned to a git ref until it has a first PyPI release.
+# Drop this once that dependency switches to a normal version pin.
+allow-direct-references = true
 
 [project.scripts]
 outnews = "openoutnews.__main__:main"

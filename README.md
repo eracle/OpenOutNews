@@ -5,15 +5,12 @@ learn what a reader engages with, print a CSV of what to send next.
 
 The scoring mechanism — a GP regressor over article embeddings, ranked by
 posterior fit probability once enough labels exist and by BALD uncertainty
-before that — is copied forward from
-[OpenOutFind](https://github.com/eracle/OpenOutFind)'s lead qualifier
-(`core/ml/qualifier.py`) and adapted: the label is reader engagement
-(read/skip) instead of an LLM's ICP-fit verdict. See
-`openoutnews/ml/qualifier.py` for what changed on the way over.
+before that — is [OpenOutLearn](https://github.com/eracle/OpenOutLearn)'s
+`GPBaldQualifier`, the same engine [OpenOutFind](https://github.com/eracle/OpenOutFind)'s
+lead qualifier subclasses. Here the label is reader engagement (read/skip)
+instead of an LLM's ICP-fit verdict — see `openoutnews/ml/qualifier.py`.
 
-This is a first version: a CSV in, a CSV out, no wizard, no send step. No
-shared library with OpenOutFind exists yet — extracting one is deferred until
-this repo has a published version to design the interface against.
+This is a first version: a CSV in, a CSV out, no wizard, no send step.
 
 ## Install
 
