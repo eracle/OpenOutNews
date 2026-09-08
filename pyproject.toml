@@ -9,6 +9,7 @@ description = "Explore/exploit news curation for a newsletter: fetch candidates,
 readme = "README.md"
 requires-python = ">=3.11"
 license = "GPL-3.0-or-later"
+license-files = ["LICENCE.md"]
 authors = [{ name = "OpenOutNews", email = "hello@openoutreach.app" }]
 keywords = [
     "newsletter",
