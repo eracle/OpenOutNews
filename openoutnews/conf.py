@@ -50,4 +50,4 @@ EMBEDDING_DIM = 384
 # before the qualifier scores anything (see ``openoutnews.dedup``). Sits in
 # the ~0.9-0.95 range production news-dedup systems use; tune against real
 # `find` output, not in the abstract.
-SYNDICATION_SIMILARITY_THRESHOLD = 0.92
+SYNDICATION_SIMILARITY_THRESHOLD = 0.90
