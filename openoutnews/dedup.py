@@ -6,7 +6,8 @@ qualifier only knows embedding distance, not "story" versus "article", so
 once one such row earns a positive label, live testing showed the next
 `find` batch filling up with four or five other outlets' near-identical
 coverage of the same event instead of surfacing a different story — see
-``roadmap/p2-e3-openoutnews-syndication-dedup.md`` in openoutreach-docs.
+``roadmap/history/2026-09-08-p2-e3-openoutnews-syndication-dedup.md`` in
+openoutreach-docs.
 
 This groups near-duplicate candidates by cosine similarity (connected
 components above ``conf.SYNDICATION_SIMILARITY_THRESHOLD``) before they ever
