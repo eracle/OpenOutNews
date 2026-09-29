@@ -1,3 +1,5 @@
+![OpenOutNews Logo](docs/logo.png)
+
 # OpenOutNews
 
 Explore/exploit news curation for a newsletter: fetch candidate articles,
