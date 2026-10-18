@@ -379,6 +379,31 @@ def test_a_run_that_dies_mid_verdicts_resumes_without_fetching_again(monkeypatch
         assert store.last_issue(conn)["id"] == 1
 
 
+def _first_release(headline, accepted):
+    """Every release after the first repeats it — one story told seven times."""
+    releases = [i for i, h in enumerate(accepted, start=1) if h.startswith("release")]
+    return releases[0] if headline.startswith("release") and releases else None
+
+
+def test_a_repeat_is_never_picked_and_trains_as_zero(monkeypatch, capsys, fake_model):
+    fake_model.fits = _is_release
+    fake_model.repeats = _first_release
+    monkeypatch.setattr(cli.issue.fetch, "fetch_day", _releases_and_funding)
+    monkeypatch.setenv("OPENOUTNEWS_TOPICS", "ai")
+
+    assert cli.cmd_find(10) == 0
+
+    rows = _rows(capsys)
+    assert len(rows) == 1
+    with store.connect() as conn:
+        story = store.issue_stories(conn, 1)
+        assert [s["id"] for s in story] == [rows[0]["id"]]
+        repeats = conn.execute("SELECT repeat_of FROM articles WHERE repeat_of IS NOT NULL").fetchall()
+        assert len(repeats) == 6 and {r[0] for r in repeats} == {rows[0]["id"]}
+        _, labels = store.verdict_arrays(conn)
+        assert sorted(labels.tolist()) == [0] * 13 + [1]
+
+
 def test_reader_labels_are_stored_apart_from_verdicts(monkeypatch, capsys):
     monkeypatch.setenv("OPENOUTNEWS_TOPICS", "ai")
     cli.cmd_find(10)
@@ -432,6 +457,39 @@ def test_agent_verdicts_are_recorded_and_finish_the_issue(monkeypatch, capsys, f
     rows = _rows(capsys)
     assert [(r["id"], r["reason"]) for r in rows] == [(first, "An open-weight release")]
     assert fake_model.judged == []
+
+
+def test_an_agent_marks_a_repeat_of_an_accepted_story(monkeypatch, capsys):
+    monkeypatch.setenv("OPENOUTNEWS_VERDICTS_PER_ISSUE", "2")
+    monkeypatch.setenv("OPENOUTNEWS_TOPICS", "ai")
+    cli.main(["find", "10", "--agent-qualify"])
+    first = _pending_payload(capsys.readouterr().err)["article_id"]
+    cli.main(["find", "10", "--agent-qualify", "--verdict", "fit", "--reason", "A story"])
+    payload = _pending_payload(capsys.readouterr().err)
+    assert [a["article_id"] for a in payload["accepted"]] == [first]
+
+    assert cli.main(["find", "10", "--agent-qualify", "--verdict", "fit", "--reason",
+                     "The same story", "--repeats", first]) == 0
+
+    assert [r["id"] for r in _rows(capsys)] == [first]
+    with store.connect() as conn:
+        assert store.get_row(conn, payload["article_id"])["repeat_of"] == first
+
+
+def test_a_repeat_of_no_accepted_story_is_an_error(monkeypatch, capsys):
+    monkeypatch.setenv("OPENOUTNEWS_TOPICS", "ai")
+    cli.main(["find", "10", "--agent-qualify"])
+
+    assert cli.main(["find", "10", "--agent-qualify", "--verdict", "fit", "--reason", "r",
+                     "--repeats", "nope"]) == 1
+
+    assert "is not an article this issue accepted" in capsys.readouterr().err
+
+
+def test_repeats_goes_with_a_fit_only(capsys):
+    assert cli.main(["find", "10", "--agent-qualify", "--verdict", "no-fit", "--reason", "r",
+                     "--repeats", "x"]) == 1
+    assert "--repeats marks a fit" in capsys.readouterr().err
 
 
 def test_a_verdict_with_nothing_pending_is_an_error(monkeypatch, capsys):

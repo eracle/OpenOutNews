@@ -33,7 +33,7 @@ def _urlopen_returning(body: bytes):
 
 def test_fetch_candidates_parses_titled_linked_items():
     with patch("openoutnews.fetch.urllib.request.urlopen", return_value=_urlopen_returning(_RSS.encode())):
-        candidates = fetch.fetch_candidates("open source AI")
+        candidates = fetch.fetch_candidates("open source AI", ("US", "en"))
 
     assert len(candidates) == 1
     assert candidates[0].title == "First story"
@@ -45,7 +45,7 @@ def test_fetch_candidates_parses_titled_linked_items():
 def test_fetch_candidates_skips_items_missing_a_link_or_title():
     body = b"<rss><channel><item><title></title><link>https://example.com/x</link></item></channel></rss>"
     with patch("openoutnews.fetch.urllib.request.urlopen", return_value=_urlopen_returning(body)):
-        candidates = fetch.fetch_candidates("topic")
+        candidates = fetch.fetch_candidates("topic", ("US", "en"))
 
     assert candidates == []
 
@@ -64,20 +64,43 @@ def test_fetch_day_sends_the_dated_query():
     assert "q=llama.cpp%20after%3A2026-10-10%20before%3A2026-10-11" in url
 
 
-def test_feed_url_defaults_to_the_us_english_edition(monkeypatch):
+def test_feed_url_takes_a_regional_hl_for_english():
+    assert fetch.feed_url("wine", ("US", "en")).endswith("?q=wine&hl=en-US&gl=US&ceid=US:en")
+
+
+def test_feed_url_takes_the_bare_language_outside_english():
+    assert fetch.feed_url("vino", ("IT", "it")).endswith("?q=vino&hl=it&gl=IT&ceid=IT:it")
+
+
+def _fetched_url(topic: str) -> str:
+    with patch("openoutnews.fetch.urllib.request.urlopen",
+               return_value=_urlopen_returning(_RSS.encode())) as urlopen:
+        fetch.fetch_day(topic, date(2026, 10, 10))
+    return urlopen.call_args.args[0].full_url
+
+
+def test_fetch_day_searches_the_default_edition(monkeypatch):
     monkeypatch.delenv("OPENOUTNEWS_EDITION", raising=False)
-    assert fetch.feed_url("wine").endswith("?q=wine&hl=en-US&gl=US&ceid=US:en")
-
-
-def test_feed_url_takes_the_bare_language_outside_english(monkeypatch):
+    assert _fetched_url("wine").endswith("&hl=en-US&gl=US&ceid=US:en")
     monkeypatch.setenv("OPENOUTNEWS_EDITION", "IT:it")
-    assert fetch.feed_url("vino").endswith("?q=vino&hl=it&gl=IT&ceid=IT:it")
+    assert _fetched_url("vino").endswith("&hl=it&gl=IT&ceid=IT:it")
+
+
+def test_a_topic_searches_its_own_edition(monkeypatch):
+    monkeypatch.setenv("OPENOUTNEWS_EDITION", "IT:it")
+
+    url = _fetched_url("Italian wine@GB:en")
+
+    assert "q=Italian%20wine%20after%3A2026-10-10" in url
+    assert url.endswith("&hl=en-GB&gl=GB&ceid=GB:en")
 
 
 def test_a_malformed_edition_is_refused(monkeypatch):
     monkeypatch.setenv("OPENOUTNEWS_EDITION", "italy")
     with pytest.raises(ValueError, match="COUNTRY:language"):
-        fetch.feed_url("vino")
+        fetch.fetch_day("vino", date(2026, 10, 10))
+    with pytest.raises(ValueError, match="topic 'vino@italy'"):
+        fetch.fetch_day("vino@italy", date(2026, 10, 10))
 
 
 def test_google_day_reads_published_at_as_a_pacific_date():

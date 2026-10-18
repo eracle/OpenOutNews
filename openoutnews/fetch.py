@@ -63,18 +63,18 @@ class Candidate:
     summary: str
 
 
-def feed_url(query: str) -> str:
-    """The RSS search URL for ``query`` in the configured edition."""
-    country, language = conf.edition()
+def feed_url(query: str, edition: tuple[str, str]) -> str:
+    """The RSS search URL for ``query`` in the ``(country, language)`` edition."""
+    country, language = edition
     hl = f"{language}-{country}" if language == "en" else language
     return _RSS_URL.format(query=urllib.parse.quote(query), hl=hl,
                            country=country, language=language)
 
 
-def fetch_candidates(query: str) -> list[Candidate]:
-    """Every article Google News' RSS returns for one search query."""
+def fetch_candidates(query: str, edition: tuple[str, str]) -> list[Candidate]:
+    """Every article Google News' RSS returns for one search query in one edition."""
     request = urllib.request.Request(
-        feed_url(query),
+        feed_url(query, edition),
         headers={"User-Agent": "OpenOutNews/0.1 (+https://openoutreach.app)"},
     )
     with urllib.request.urlopen(request, timeout=_TIMEOUT_S) as response:
@@ -102,8 +102,10 @@ def day_query(topic: str, day: date) -> str:
 
 
 def fetch_day(topic: str, day: date) -> list[Candidate]:
-    """Every article Google News returns for ``topic`` on ``day``."""
-    return fetch_candidates(day_query(topic, day))
+    """Every article Google News returns for ``topic`` on ``day``, in the
+    topic's edition (``conf.topic_edition``)."""
+    query, edition = conf.topic_edition(topic)
+    return fetch_candidates(day_query(query, day), edition)
 
 
 def google_today() -> date:

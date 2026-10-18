@@ -35,20 +35,34 @@ def topics() -> list[str]:
     ``OPENOUTNEWS_TOPICS``, e.g. ``"open source AI,B2B sales tools"``.
 
     Topics steer *what gets fetched*; the brief (``brief_text``) steers *what
-    gets sent*.
+    gets sent*. A topic may name its own edition after an ``@`` —
+    ``"Italian wine@US:en"`` — see ``topic_edition``.
     """
     raw = os.environ.get("OPENOUTNEWS_TOPICS", "")
     return [t.strip() for t in raw.split(",") if t.strip()]
 
 
 def edition() -> tuple[str, str]:
-    """The Google News edition searched, as ``(country, language)`` —
-    ``OPENOUTNEWS_EDITION``, Google's own ``ceid`` such as ``"IT:it"``;
+    """The Google News edition searched by default, as ``(country, language)``
+    — ``OPENOUTNEWS_EDITION``, Google's own ``ceid`` such as ``"IT:it"``;
     default ``"US:en"``."""
-    raw = os.environ.get("OPENOUTNEWS_EDITION", "US:en").strip()
-    country, separator, language = raw.partition(":")
+    return _parse_edition(os.environ.get("OPENOUTNEWS_EDITION", "US:en"), "OPENOUTNEWS_EDITION")
+
+
+def topic_edition(topic: str) -> tuple[str, tuple[str, str]]:
+    """A topic as ``(query, (country, language))``: its own edition after an
+    ``@``, else the default one."""
+    query, separator, raw = topic.rpartition("@")
+    if not separator:
+        return topic, edition()
+    return query.strip(), _parse_edition(raw, f"topic {topic!r}")
+
+
+def _parse_edition(raw: str, source: str) -> tuple[str, str]:
+    country, separator, language = raw.strip().partition(":")
     if not (separator and country and language):
-        raise ValueError(f"OPENOUTNEWS_EDITION {raw!r} is not 'COUNTRY:language', e.g. 'IT:it'.")
+        raise ValueError(f"{source}: edition {raw.strip()!r} is not 'COUNTRY:language', "
+                         f"e.g. 'IT:it'.")
     return country.upper(), language.lower()
 
 

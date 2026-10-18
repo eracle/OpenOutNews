@@ -133,7 +133,7 @@ def test_connect_adds_issue_columns_to_an_older_store(tmp_path, monkeypatch):
         columns = {row[1] for row in conn.execute("PRAGMA table_info(articles)")}
 
     assert {"absorbed_into", "issue_id", "issue_score",
-            "verdict", "verdict_reason", "verdict_issue_id"} <= columns
+            "verdict", "verdict_reason", "verdict_issue_id", "repeat_of"} <= columns
 
 
 def test_unsent_candidates_excludes_unembedded_rows(conn):

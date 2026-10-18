@@ -20,6 +20,11 @@ class Decision(BaseModel):
     fit: bool = Field(description="True if the article belongs in this newsletter by the rules")
     reason: str = Field(description="One sentence, under 25 words, the operator reads beside "
                                     "the headline")
+    repeats: int | None = Field(
+        default=None,
+        description="For a fit: the number of the already-accepted headline that reports the "
+                    "same story, or null if it is a new story",
+    )
 
 
 def article_fields(row) -> dict:
@@ -35,9 +40,22 @@ def article_fields(row) -> dict:
     }
 
 
-def judge(article: dict, *, rules: str) -> tuple[int, str]:
-    """Ask the model whether ``article`` fits. Returns ``(verdict, reason)``,
-    verdict 1 = fit, 0 = not."""
-    prompt = llm.render("judge_article.j2", words=conf.brief_text(), rules=rules, article=article)
+def judge(article: dict, *, rules: str, accepted: list[str]) -> tuple[int, str, int | None]:
+    """Ask the model whether ``article`` fits. Returns ``(verdict, reason, repeats)``:
+    verdict 1 = fit, 0 = not; ``repeats`` the index into ``accepted`` (the
+    headlines this issue already accepted) of the story a fit repeats, or ``None``.
+
+    Whether two headlines are one story is the model's call, not a similarity
+    threshold: on a week of Italian wine news, rewrites of one story embedded
+    as low as 0.83 while different stories met at 0.80 and above.
+    """
+    prompt = llm.render("judge_article.j2", words=conf.brief_text(), rules=rules,
+                        article=article, accepted=accepted)
     decision = llm.ask(prompt, Decision)
-    return (1 if decision.fit else 0), decision.reason.strip()
+    fit = 1 if decision.fit else 0
+    repeats = decision.repeats
+    if not fit or repeats is None or not 1 <= repeats <= len(accepted):
+        repeats = None
+    else:
+        repeats -= 1
+    return fit, decision.reason.strip(), repeats

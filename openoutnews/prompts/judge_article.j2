@@ -12,7 +12,12 @@ You judge whether one news article belongs in a newsletter.
 {% endif %}{% if article.published %}- **Published:** {{ article.published }}
 {% endif %}
 The headline is all there is: no article body was fetched.
-
+{% if accepted %}
+## Already accepted for this issue
+{% for headline in accepted %}{{ loop.index }}. {{ headline }}
+{% endfor %}
+If the article fits but reports the same story as one of these — the same event, announcement or report, told by another outlet or in other words — give that headline's number as `repeats`. A different event on the same subject is a new story: leave `repeats` empty.
+{% endif %}
 ## How to judge
 {% if rules %}- **The rules decide.** An article that matches any "not a fit" rule is not a fit, however close its subject.
 {% endif %}- **News, not a mention.** The article has to report something that happened to a subject these readers follow — a release, a result, a change — not merely name it.

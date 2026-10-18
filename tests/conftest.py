@@ -25,10 +25,13 @@ class FakeModel:
     """Answers ``llm.ask`` by the output type asked for, and records what it was asked.
 
     ``fits`` decides each verdict from the headline; every article fits by default.
+    ``repeats`` names, from the headline and the accepted headlines the prompt
+    lists, the 1-based number of the story a fit repeats; none by default.
     """
 
     def __init__(self):
         self.fits = lambda headline: True
+        self.repeats = lambda headline, accepted: None
         self.anchors = ["Ideal release one - Outlet", "Ideal release two - Outlet",
                         "Ideal release three - Outlet"]
         self.briefs_written = 0
@@ -42,9 +45,11 @@ class FakeModel:
         if name == "_Headlines":
             return output_type(headlines=self.anchors)
         headline = re.search(r"\*\*Headline:\*\* (.*)", prompt).group(1)
+        accepted = re.findall(r"^\d+\. (.*)$", prompt, flags=re.MULTILINE)
         self.judged.append(headline)
         fit = self.fits(headline)
-        return output_type(fit=fit, reason=f"{'fits' if fit else 'rejected'}: {headline}")
+        return output_type(fit=fit, reason=f"{'fits' if fit else 'rejected'}: {headline}",
+                           repeats=self.repeats(headline, accepted))
 
 
 @pytest.fixture

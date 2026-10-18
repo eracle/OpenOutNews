@@ -29,7 +29,8 @@ export OPENOUTNEWS_BRIEF="Engineers who self-host open-weight models. Releases, 
 tooling, licences. Not funding rounds, not opinion pieces, not consumer chatbot news."
 export OPENOUTNEWS_AI_MODEL="anthropic:claude-haiku-5-5"   # or openai:<model>
 export OPENOUTNEWS_LLM_API_KEY="..."
-export OPENOUTNEWS_EDITION="US:en"          # Google News edition, e.g. "IT:it"
+export OPENOUTNEWS_EDITION="US:en"          # default Google News edition, e.g. "IT:it";
+                                            # a topic names its own as "Italian wine@GB:en"
 export OPENOUTNEWS_VERDICTS_PER_ISSUE=150   # articles an issue may put to the model
 export OPENOUTNEWS_ISSUE_DAYS=7             # how far back the first issue reaches
 export OPENOUTNEWS_DEDUP_LOOKBACK_DAYS=28   # how far back "already sent" reaches
@@ -71,8 +72,14 @@ fits it picks by P(fit); after that it exploits once rejections outnumber
 fits and explores by BALD while they are even. Each verdict is stored as it
 lands, so a run that dies resumes the same issue without fetching again.
 
-The issue's picks are the accepted articles, ranked by the GP, with the
-reason in the CSV's `reason` column. Running `find` again on the day an issue
+Each verdict also sees the headlines the issue has accepted so far and says
+whether a fit reports one of those stories again. Whether two headlines are
+one story is the model's call: no similarity threshold separates rewrites
+from different stories. A repeat is never picked, and it teaches the
+qualifier to move on rather than spend more verdicts on that story.
+
+The issue's picks are the accepted stories, one article each, ranked by the
+GP, with the reason in the CSV's `reason` column. Running `find` again on the day an issue
 was finished prints that issue again.
 
 **Reader labels** (`outnews label`) are stored in their own column and train
@@ -89,7 +96,8 @@ verdict reads, and exits 1; the agent answers with
 outnews find 10 --agent-qualify --verdict fit --reason "Three new open-weight models from Nvidia"
 ```
 
-which records the verdict and stops at the next article, until the budget is
+(adding `--repeats ID` for a fit that reports a story in the payload's
+`accepted` list), which records the verdict and stops at the next article, until the budget is
 spent and the issue prints. Nothing writes a brief or anchors in this mode,
 so hand rules in with `--brief`; without anchors the first verdicts go to the
 newest articles.

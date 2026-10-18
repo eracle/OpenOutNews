@@ -19,13 +19,35 @@ def test_article_fields_keep_a_headline_with_no_outlet_whole():
     assert fields == {"headline": "No outlet here", "outlet": "", "published": ""}
 
 
+_ARTICLE = {"headline": "release", "outlet": "Outlet", "published": "2026-10-14"}
+
+
 def test_judge_renders_the_article_and_maps_the_decision(monkeypatch, fake_model):
-    assert verdict.judge({"headline": "release", "outlet": "Outlet", "published": "2026-10-14"},
-                         rules="- A fit is: a release") == (1, "fits: release")
+    assert verdict.judge(_ARTICLE, rules="- A fit is: a release", accepted=[]) == \
+        (1, "fits: release", None)
 
     fake_model.fits = lambda headline: False
     assert verdict.judge({"headline": "funding", "outlet": "", "published": ""},
-                         rules="") == (0, "rejected: funding")
+                         rules="", accepted=[]) == (0, "rejected: funding", None)
+
+
+def test_judge_shows_the_accepted_headlines_and_maps_a_repeat_to_an_index(fake_model):
+    seen = []
+    fake_model.repeats = lambda headline, accepted: seen.append(accepted) or 2
+
+    _, _, repeats = verdict.judge(_ARTICLE, rules="", accepted=["first - A", "second - B"])
+
+    assert seen == [["first - A", "second - B"]]
+    assert repeats == 1
+
+
+def test_judge_drops_a_repeat_out_of_range_or_on_a_rejection(fake_model):
+    fake_model.repeats = lambda headline, accepted: 5
+    assert verdict.judge(_ARTICLE, rules="", accepted=["only - A"])[2] is None
+
+    fake_model.repeats = lambda headline, accepted: 1
+    fake_model.fits = lambda headline: False
+    assert verdict.judge(_ARTICLE, rules="", accepted=["only - A"])[2] is None
 
 
 def test_the_prompt_carries_the_words_the_rules_and_the_fields(fake_model):

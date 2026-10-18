@@ -7,8 +7,10 @@ verdict. The qualifier chooses, one verdict at a time, up to
 by P(fit) while the anchors still outnumber real fits, then by the label
 balance — exploit once rejections outnumber fits, BALD while they are even.
 Each verdict is stored and committed as it lands, so a run that dies keeps
-what it paid for and the next ``find`` resumes the same issue. The issue's
-picks are the accepted articles, ranked by the GP.
+what it paid for and the next ``find`` resumes the same issue. Each verdict
+also says whether a fit repeats a story the issue already accepted; a repeat
+is never picked and trains the GP as 0, so the next verdicts leave that story.
+The issue's picks are the accepted stories, ranked by the GP.
 
 Under ``--agent-qualify`` no model is called: the article the qualifier picks
 is handed to the calling agent instead (``QualifyPending``), remembered on the
@@ -30,10 +32,12 @@ from openoutnews.ml.qualifier import FitQualifier
 
 @dataclass(frozen=True)
 class AgentAnswer:
-    """A calling agent's verdict on the pending article."""
+    """A calling agent's verdict on the pending article; ``repeats`` the id of
+    the accepted article it reports the same story as."""
 
     fit: bool
     reason: str
+    repeats: str | None = None
 
 
 class QualifyPending(Exception):
@@ -50,6 +54,10 @@ class QualifyPending(Exception):
 
 class NothingPending(Exception):
     """A verdict was given but no article is waiting on one."""
+
+
+class BadAnswer(Exception):
+    """An agent's ``--repeats`` names no story this issue accepted."""
 
 
 def qualifier_for(conn, anchor_embeddings: np.ndarray | None) -> FitQualifier:
@@ -86,10 +94,16 @@ def judge_pool(conn, issue, pool, qualifier: FitQualifier, *, rules: str,
         if agent:
             store.set_pending(conn, issue["id"], row["id"])
             conn.commit()
-            raise QualifyPending(f"{row['title']!r} needs a verdict", _payload(row, rules))
+            raise QualifyPending(f"{row['title']!r} needs a verdict",
+                                 _payload(conn, issue["id"], row, rules))
 
-        label, reason = verdict.judge(verdict.article_fields(row), rules=rules)
-        _record(conn, qualifier, issue["id"], row, label, reason)
+        stories = store.issue_stories(conn, issue["id"])
+        label, reason, repeats = verdict.judge(
+            verdict.article_fields(row), rules=rules,
+            accepted=[story["title"] for story in stories],
+        )
+        repeat_of = stories[repeats]["id"] if repeats is not None else None
+        _record(conn, qualifier, issue["id"], row, label, reason, repeat_of)
         conn.commit()
         judged.add(row["id"])
         modes[mode] += 1
@@ -117,8 +131,13 @@ def _take_pending(conn, issue, qualifier, *, rules: str, agent: bool,
     row = store.get_row(conn, aid)
     if answer is None:
         raise QualifyPending(f"{row['title']!r} is still waiting on a verdict",
-                             _payload(row, rules))
-    _record(conn, qualifier, issue["id"], row, int(answer.fit), answer.reason.strip())
+                             _payload(conn, issue["id"], row, rules))
+    if answer.repeats is not None and answer.repeats not in {
+            story["id"] for story in store.issue_stories(conn, issue["id"])}:
+        raise BadAnswer(f"--repeats {answer.repeats} is not an article this issue accepted "
+                        f"— see 'accepted' in the pending payload")
+    _record(conn, qualifier, issue["id"], row, int(answer.fit), answer.reason.strip(),
+            answer.repeats if answer.fit else None)
     store.set_pending(conn, issue["id"], None)
     conn.commit()
     return aid
@@ -138,31 +157,39 @@ def _next_pick(qualifier: FitQualifier, unjudged) -> tuple:
     return unjudged[int(np.argmax(scores))], mode
 
 
-def _record(conn, qualifier: FitQualifier, issue_id: int, row, label: int, reason: str):
-    store.set_verdict(conn, row["id"], issue_id, label, reason)
-    qualifier.update(np.frombuffer(row["embedding"], dtype=np.float32), label)
-    word = "FIT" if label else "NO FIT"
+def _record(conn, qualifier: FitQualifier, issue_id: int, row, label: int, reason: str,
+            repeat_of: str | None = None):
+    store.set_verdict(conn, row["id"], issue_id, label, reason, repeat_of)
+    # A repeat trains as 0, as ``store.verdict_arrays`` loads it.
+    qualifier.update(np.frombuffer(row["embedding"], dtype=np.float32),
+                     0 if repeat_of else label)
+    word = "REPEAT" if repeat_of else "FIT" if label else "NO FIT"
     print(f"  {'✓' if label else '✗'}  {word:<6}  {row['title']} — {reason}", file=sys.stderr)
 
 
-def _payload(row, rules: str) -> dict:
+def _payload(conn, issue_id: int, row, rules: str) -> dict:
     return {
         "article_id": row["id"],
         "url": row["url"],
         **verdict.article_fields(row),
         "words": conf.brief_text(),
         "rules": rules,
+        # A fit reporting the same story as one of these is answered with --repeats ID.
+        "accepted": [{"article_id": story["id"], "headline": story["title"]}
+                     for story in store.issue_stories(conn, issue_id)],
     }
 
 
 # ── Picks ──
 
 def rank_fits(conn, pool, qualifier: FitQualifier, n: int) -> tuple[str, list[tuple[str, float | None]]]:
-    """How the fits were ranked and the top ``n`` ``(article_id, score)``.
+    """How the fits were ranked and the top ``n`` ``(article_id, score)`` —
+    one per story: a repeat is never picked.
 
     Newest first when the GP cannot fit — no rejection yet.
     """
-    fits = [row for row in (store.get_row(conn, r["id"]) for r in pool) if row["verdict"] == 1]
+    fits = [row for row in (store.get_row(conn, r["id"]) for r in pool)
+            if row["verdict"] == 1 and row["repeat_of"] is None]
     if not fits:
         return "no fits", []
     probs = qualifier.predict_probs(_embeddings(fits))

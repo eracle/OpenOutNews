@@ -31,7 +31,7 @@ OpenOutNews — news picks for a newsletter, judged against its brief.
 
   outnews find 10                 the next issue's ten picks -> CSV on stdout
   outnews find 10 --brief PATH    ...judged by the rules in PATH, kept for later issues
-  outnews find 10 --agent-qualify [--verdict fit|no-fit --reason MSG]
+  outnews find 10 --agent-qualify [--verdict fit|no-fit --reason MSG [--repeats ID]]
                                   the calling agent judges each article instead of the model
   outnews label ID read           record that the reader engaged with an article
   outnews label ID skip           record that they didn't
@@ -84,11 +84,12 @@ def _open_issue(conn, topics: list[str], today: date):
 def _summarise(conn, issue_row, pool, picks, modes) -> None:
     fetches = store.issue_fetches(conn, issue_row["id"])
     judged = store.issue_verdict_count(conn, issue_row["id"])
+    stories = len(store.issue_stories(conn, issue_row["id"]))
     fits = sum(store.get_row(conn, r["id"])["verdict"] == 1 for r in pool)
     chosen = ", ".join(f"{count} {mode}" for mode, count in modes.most_common())
     print(f"issue {issue_row['id']} ({issue_row['window_start']} to {issue_row['window_end']}): "
           f"judged {judged} of {len(pool)} candidates (budget {conf.verdicts_per_issue()}), "
-          f"{fits} fit, picked {len(picks)} by {issue_row['mode']}; "
+          f"{fits} fit in {stories} stories, picked {len(picks)} by {issue_row['mode']}; "
           + (f"chosen by {chosen}; " if chosen else "")
           + f"{sum(f['status'] == 'saturated' for f in fetches)} saturated and "
           f"{sum(f['status'] == 'failed' for f in fetches)} failed day queries",
@@ -129,8 +130,8 @@ def _run_issue(conn, last, topics, today: date, n: int, *, agent: bool,
 def _print_pending(pending: qualify.QualifyPending, n: int) -> None:
     print(f"error: qualify_pending: {pending}", file=sys.stderr)
     print(json.dumps(pending.payload), file=sys.stderr)
-    print(f"answer with: outnews find {n} --agent-qualify --verdict fit|no-fit --reason MSG",
-          file=sys.stderr)
+    print(f"answer with: outnews find {n} --agent-qualify --verdict fit|no-fit --reason MSG "
+          f"[--repeats ID, for a fit that reports a story already accepted]", file=sys.stderr)
 
 
 def cmd_find(n: int, *, brief_path: str | None = None, agent: bool = False,
@@ -140,7 +141,8 @@ def cmd_find(n: int, *, brief_path: str | None = None, agent: bool = False,
         print("OPENOUTNEWS_TOPICS is not set — nothing to fetch.", file=sys.stderr)
         return 0
     try:
-        conf.edition()
+        for topic in topics:
+            conf.topic_edition(topic)
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -156,7 +158,7 @@ def cmd_find(n: int, *, brief_path: str | None = None, agent: bool = False,
             return 0
         try:
             return _run_issue(conn, last, topics, today, n, agent=agent, answer=answer)
-        except (brief.MissingBrief, qualify.NothingPending) as exc:
+        except (brief.MissingBrief, qualify.NothingPending, qualify.BadAnswer) as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 1
         except qualify.QualifyPending as pending:
@@ -192,6 +194,7 @@ def _parser() -> argparse.ArgumentParser:
     find.add_argument("--agent-qualify", action="store_true")
     find.add_argument("--verdict", choices=["fit", "no-fit"])
     find.add_argument("--reason")
+    find.add_argument("--repeats", metavar="ID")
 
     label = commands.add_parser("label")
     label.add_argument("id")
@@ -215,10 +218,14 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_label(args.id, args.verdict)
 
     answer = None
-    if args.verdict or args.reason:
+    if args.verdict or args.reason or args.repeats:
         if not (args.agent_qualify and args.verdict and args.reason):
             print("error: --verdict and --reason go together, with --agent-qualify",
                   file=sys.stderr)
             return 1
-        answer = qualify.AgentAnswer(fit=args.verdict == "fit", reason=args.reason)
+        if args.repeats and args.verdict != "fit":
+            print("error: --repeats marks a fit as a story already accepted", file=sys.stderr)
+            return 1
+        answer = qualify.AgentAnswer(fit=args.verdict == "fit", reason=args.reason,
+                                     repeats=args.repeats)
     return cmd_find(args.n, brief_path=args.brief, agent=args.agent_qualify, answer=answer)

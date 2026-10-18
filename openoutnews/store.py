@@ -39,7 +39,8 @@ CREATE TABLE IF NOT EXISTS articles (
     issue_score REAL,
     verdict INTEGER,
     verdict_reason TEXT,
-    verdict_issue_id INTEGER
+    verdict_issue_id INTEGER,
+    repeat_of TEXT
 );
 CREATE TABLE IF NOT EXISTS issues (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -78,6 +79,7 @@ _ADDED_COLUMNS = {
     "verdict": "INTEGER",
     "verdict_reason": "TEXT",
     "verdict_issue_id": "INTEGER",
+    "repeat_of": "TEXT",
 }
 
 
@@ -144,12 +146,27 @@ def label_article(conn, aid: str, label: int):
     conn.execute("UPDATE articles SET label = ? WHERE id = ?", (label, aid))
 
 
-def set_verdict(conn, aid: str, issue_id: int, verdict: int, reason: str):
-    """Record the model's verdict — 1 = fits the newsletter, 0 = not — given in ``issue_id``."""
+def set_verdict(conn, aid: str, issue_id: int, verdict: int, reason: str,
+                repeat_of: str | None = None):
+    """Record the model's verdict — 1 = fits the newsletter, 0 = not — given in
+    ``issue_id``; ``repeat_of`` names the accepted article of the same issue a
+    fit reports the same story as."""
     conn.execute(
-        "UPDATE articles SET verdict = ?, verdict_reason = ?, verdict_issue_id = ? WHERE id = ?",
-        (verdict, reason, issue_id, aid),
+        "UPDATE articles SET verdict = ?, verdict_reason = ?, verdict_issue_id = ?, repeat_of = ? "
+        "WHERE id = ?",
+        (verdict, reason, issue_id, repeat_of, aid),
     )
+
+
+def issue_stories(conn, issue_id: int) -> list[sqlite3.Row]:
+    """The fits ``issue_id`` accepted that repeat no other — one per story, in
+    the order they were judged."""
+    conn.row_factory = sqlite3.Row
+    return conn.execute(
+        "SELECT * FROM articles WHERE verdict_issue_id = ? AND verdict = 1 AND repeat_of IS NULL "
+        "ORDER BY rowid",
+        (issue_id,),
+    ).fetchall()
 
 
 def mark_sent(conn, issue_id: int, picks: list[tuple[str, float | None]]):
@@ -235,9 +252,16 @@ def issue_picks(conn, issue_id: int) -> list[sqlite3.Row]:
 
 
 def verdict_arrays(conn) -> tuple[np.ndarray, np.ndarray]:
-    """Every judged article's (embedding, verdict) — what the qualifier fits on."""
+    """Every judged article's (embedding, label) — what the qualifier fits on.
+
+    The label is the verdict, except a repeat counts 0: it fits, but another
+    verdict near a story already accepted buys nothing, and a 1 there kept the
+    GP spending verdicts on copies of one story (13 of 30 in a winery issue
+    went to rewrites of the same harvest reports).
+    """
     rows = conn.execute(
-        "SELECT embedding, verdict FROM articles WHERE verdict IS NOT NULL AND embedding IS NOT NULL"
+        "SELECT embedding, CASE WHEN repeat_of IS NULL THEN verdict ELSE 0 END FROM articles "
+        "WHERE verdict IS NOT NULL AND embedding IS NOT NULL"
     ).fetchall()
     if not rows:
         return np.empty((0, conf.EMBEDDING_DIM), dtype=np.float32), np.empty((0,), dtype=np.int64)
