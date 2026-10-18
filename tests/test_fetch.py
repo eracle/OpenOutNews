@@ -1,4 +1,5 @@
 # tests/test_fetch.py
+from datetime import date
 from unittest.mock import MagicMock, patch
 
 from openoutnews import fetch
@@ -45,6 +46,27 @@ def test_fetch_candidates_skips_items_missing_a_link_or_title():
         candidates = fetch.fetch_candidates("topic")
 
     assert candidates == []
+
+
+def test_day_query_bounds_one_day_with_after_and_before():
+    assert fetch.day_query("open source AI", date(2026, 10, 31)) == \
+        "open source AI after:2026-10-31 before:2026-11-01"
+
+
+def test_fetch_day_sends_the_dated_query():
+    with patch("openoutnews.fetch.urllib.request.urlopen",
+               return_value=_urlopen_returning(_RSS.encode())) as urlopen:
+        fetch.fetch_day("llama.cpp", date(2026, 10, 10))
+
+    url = urlopen.call_args.args[0].full_url
+    assert "q=llama.cpp%20after%3A2026-10-10%20before%3A2026-10-11" in url
+
+
+def test_google_day_reads_published_at_as_a_pacific_date():
+    assert fetch.google_day("2026-10-11T07:00:00+00:00") == date(2026, 10, 11)
+    assert fetch.google_day("2026-10-11T06:59:59+00:00") == date(2026, 10, 10)
+    assert fetch.google_day("2026-10-11T06:59:59") == date(2026, 10, 10)  # naive is UTC
+    assert fetch.google_day(None) is None
 
 
 def test_to_iso_returns_none_for_unparseable_dates():

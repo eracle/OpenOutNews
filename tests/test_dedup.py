@@ -62,5 +62,19 @@ def test_a_missing_published_at_never_wins_earliest_over_a_known_date():
     assert clusters == {"dated": ["unknown-date"]}
 
 
+def test_a_candidate_repeating_a_sent_article_is_absorbed_into_the_closest():
+    sent = [_row("sent-a", [1.0, 0.0, 0.0], None), _row("sent-b", [0.0, 1.0, 0.0], None)]
+    candidates = [
+        _row("rewrite-of-b", [0.0, 1.0, 0.0001], None),
+        _row("new-story", [0.0, 0.0, 1.0], None),
+    ]
+
+    assert dedup.absorb_into_sent(candidates, sent) == {"sent-b": ["rewrite-of-b"]}
+
+
+def test_nothing_is_absorbed_with_nothing_sent():
+    assert dedup.absorb_into_sent([_row("a", [1.0, 0.0], None)], []) == {}
+
+
 def test_a_single_row_never_clusters():
     assert dedup.cluster_representatives([_row("a", [1.0, 0.0], "2026-09-01")]) == {}

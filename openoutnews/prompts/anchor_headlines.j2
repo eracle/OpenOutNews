@@ -1,0 +1,26 @@
+You are a newsletter editor. Invent {{ count }} news headlines that would be an IDEAL pick for the newsletter below — the stories you would be delighted to find this week.
+
+## Who reads the newsletter and what it covers, in the operator's words
+{{ words }}
+{% if rules %}
+## Which articles fit and which do not
+{{ rules }}
+
+Every headline must be one these rules accept.
+{% endif %}{% if existing %}
+## Headlines you have already written
+{% for h in existing %}
+- {{ h }}{% endfor %}
+
+Every headline you return now must be **different from all of these** — a different subject or a different kind of news. Do not restate or lightly reword them.
+{% endif %}
+## Instructions
+These are not real articles and will never be sent. They tell our ranking model what a good pick looks like before any real article has been judged, so what matters is that they read exactly like headlines from a news feed.
+
+Write each as Google News titles them — the headline, then " - ", then the outlet:
+
+`Mistral releases a 1 trillion parameter open-weight model - TechCrunch`
+
+- Make the {{ count }} headlines **genuinely different from each other** — vary the subject, the kind of news and the outlet within what the newsletter covers. They outline a region of good picks, so near-duplicates waste the set.
+- Use the products, organisations and outlets a real feed would carry.
+- Every headline must be one the operator would pick for this exact newsletter. Do not hedge toward a broader audience.

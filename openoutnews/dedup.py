@@ -15,12 +15,46 @@ reach the qualifier. One representative per group survives to be scored; the
 rest are recorded as absorbed into it rather than dropped, since a dropped
 duplicate would just be re-fetched and re-clustered on the next `find` for no
 benefit.
+
+Clustering only ever sees one issue's window. A story already sent is
+handled first, by ``absorb_into_sent``: a candidate near-identical to an
+article sent within the lookback is absorbed into that article, so next
+week's rewrite of this week's pick is never picked again.
 """
 from __future__ import annotations
 
 import numpy as np
 
 from openoutnews import conf
+
+
+def _unit_vectors(rows) -> np.ndarray:
+    vectors = np.array([np.frombuffer(r["embedding"], dtype=np.float32) for r in rows])
+    norms = np.linalg.norm(vectors, axis=1, keepdims=True)
+    norms[norms == 0] = 1.0
+    return vectors / norms
+
+
+def absorb_into_sent(candidates, sent) -> dict[str, list[str]]:
+    """Map each sent article to the candidates that repeat it.
+
+    Returns ``{sent_id: [candidate_id, ...]}`` for every candidate whose
+    cosine similarity to some sent article reaches
+    ``conf.SYNDICATION_SIMILARITY_THRESHOLD``; each such candidate goes to the
+    sent article it is closest to. Rows are mapping-like with ``id`` and
+    ``embedding``, as in ``cluster_representatives``.
+    """
+    if not candidates or not sent:
+        return {}
+
+    similarity = _unit_vectors(candidates) @ _unit_vectors(sent).T
+    closest = similarity.argmax(axis=1)
+
+    absorbed: dict[str, list[str]] = {}
+    for i, j in enumerate(closest):
+        if similarity[i, j] >= conf.SYNDICATION_SIMILARITY_THRESHOLD:
+            absorbed.setdefault(sent[j]["id"], []).append(candidates[i]["id"])
+    return absorbed
 
 
 def cluster_representatives(rows) -> dict[str, list[str]]:
@@ -37,11 +71,8 @@ def cluster_representatives(rows) -> dict[str, list[str]]:
 
     ids = [r["id"] for r in rows]
     published = [r["published_at"] for r in rows]
-    vectors = np.array([np.frombuffer(r["embedding"], dtype=np.float32) for r in rows])
-
-    norms = np.linalg.norm(vectors, axis=1, keepdims=True)
-    norms[norms == 0] = 1.0
-    similarity = (vectors / norms) @ (vectors / norms).T
+    unit = _unit_vectors(rows)
+    similarity = unit @ unit.T
 
     parent = list(range(len(rows)))
 
