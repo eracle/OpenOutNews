@@ -51,7 +51,7 @@ def ensure(conn, *, rules: str, agent: bool) -> np.ndarray | None:
 
 def _invent(count: int, *, rules: str, existing: list[str]) -> list[str]:
     prompt = llm.render("anchor_headlines.j2", words=conf.brief_text(), rules=rules,
-                        count=count, existing=existing)
+                        count=count, existing=existing, language=conf.edition()[1])
     headlines = [h.strip() for h in llm.ask(prompt, _Headlines).headlines if h.strip()]
     return [h for h in headlines if h not in existing][:count]
 

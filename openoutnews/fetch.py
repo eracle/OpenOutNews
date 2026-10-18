@@ -22,7 +22,14 @@ source AI`` and ``local LLMs``, days 9–12 Oct):
 So consecutive days are fired back to back, the overlap is absorbed by the
 store's URL key, and which issue an article belongs to is decided by its own
 ``pubDate`` read as a Pacific date (``google_day``), not by which query
-returned it.
+returned it. The Italian edition reads the dates in Pacific time too (all 177
+items for ``vino``/``cantine``/``vendemmia`` on 14 Oct stamped between 07:00
+UTC that day and the next), so the edition changes the feed, not the days.
+
+The edition (``conf.edition()``) is three URL parameters, and ``hl`` is not
+derivable from the other two in one way: an English edition takes a regional
+``hl`` (``en-US``, ``en-GB``) and the others the bare language (``it``,
+``fr``) — each returns an empty body the other way round.
 """
 from __future__ import annotations
 
@@ -34,7 +41,10 @@ from email.utils import parsedate_to_datetime
 from xml.etree import ElementTree
 from zoneinfo import ZoneInfo
 
-_RSS_URL = "https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
+from openoutnews import conf
+
+_RSS_URL = ("https://news.google.com/rss/search?q={query}"
+            "&hl={hl}&gl={country}&ceid={country}:{language}")
 _TIMEOUT_S = 15
 
 # Items one Google News RSS query returns at most. A day that returns this
@@ -53,10 +63,18 @@ class Candidate:
     summary: str
 
 
+def feed_url(query: str) -> str:
+    """The RSS search URL for ``query`` in the configured edition."""
+    country, language = conf.edition()
+    hl = f"{language}-{country}" if language == "en" else language
+    return _RSS_URL.format(query=urllib.parse.quote(query), hl=hl,
+                           country=country, language=language)
+
+
 def fetch_candidates(query: str) -> list[Candidate]:
     """Every article Google News' RSS returns for one search query."""
     request = urllib.request.Request(
-        _RSS_URL.format(query=urllib.parse.quote(query)),
+        feed_url(query),
         headers={"User-Agent": "OpenOutNews/0.1 (+https://openoutreach.app)"},
     )
     with urllib.request.urlopen(request, timeout=_TIMEOUT_S) as response:

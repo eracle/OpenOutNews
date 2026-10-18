@@ -286,6 +286,32 @@ def test_a_missing_brief_is_an_error_that_says_so(monkeypatch, capsys):
         assert store.last_issue(conn) is None
 
 
+def test_a_malformed_edition_stops_before_fetching(monkeypatch, capsys):
+    queried = []
+    monkeypatch.setattr(cli.issue.fetch, "fetch_day",
+                        lambda topic, day: queried.append(day) or [])
+    monkeypatch.setenv("OPENOUTNEWS_EDITION", "italy")
+    monkeypatch.setenv("OPENOUTNEWS_TOPICS", "vino")
+
+    assert cli.cmd_find(10) == 1
+
+    assert "OPENOUTNEWS_EDITION" in capsys.readouterr().err
+    assert queried == []
+
+
+def test_anchors_are_asked_for_in_the_editions_language(monkeypatch, fake_model):
+    prompts = []
+    answer = fake_model.__call__
+    monkeypatch.setattr(cli.llm, "ask", lambda prompt, output_type, timeout=60:
+                        prompts.append(prompt) or answer(prompt, output_type, timeout))
+    monkeypatch.setenv("OPENOUTNEWS_EDITION", "IT:it")
+    monkeypatch.setenv("OPENOUTNEWS_TOPICS", "vino")
+
+    cli.cmd_find(10)
+
+    assert any("ISO code `it`" in p for p in prompts)
+
+
 def test_missing_model_settings_are_named(monkeypatch, capsys):
     monkeypatch.delenv("OPENOUTNEWS_LLM_API_KEY")
     monkeypatch.setenv("OPENOUTNEWS_TOPICS", "ai")

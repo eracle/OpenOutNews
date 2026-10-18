@@ -41,6 +41,17 @@ def topics() -> list[str]:
     return [t.strip() for t in raw.split(",") if t.strip()]
 
 
+def edition() -> tuple[str, str]:
+    """The Google News edition searched, as ``(country, language)`` —
+    ``OPENOUTNEWS_EDITION``, Google's own ``ceid`` such as ``"IT:it"``;
+    default ``"US:en"``."""
+    raw = os.environ.get("OPENOUTNEWS_EDITION", "US:en").strip()
+    country, separator, language = raw.partition(":")
+    if not (separator and country and language):
+        raise ValueError(f"OPENOUTNEWS_EDITION {raw!r} is not 'COUNTRY:language', e.g. 'IT:it'.")
+    return country.upper(), language.lower()
+
+
 def brief_text() -> str:
     """Who reads the newsletter and what it covers, in the operator's words —
     ``OPENOUTNEWS_BRIEF``. The stored brief is written from it once

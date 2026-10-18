@@ -29,6 +29,7 @@ export OPENOUTNEWS_BRIEF="Engineers who self-host open-weight models. Releases, 
 tooling, licences. Not funding rounds, not opinion pieces, not consumer chatbot news."
 export OPENOUTNEWS_AI_MODEL="anthropic:claude-haiku-5-5"   # or openai:<model>
 export OPENOUTNEWS_LLM_API_KEY="..."
+export OPENOUTNEWS_EDITION="US:en"          # Google News edition, e.g. "IT:it"
 export OPENOUTNEWS_VERDICTS_PER_ISSUE=150   # articles an issue may put to the model
 export OPENOUTNEWS_ISSUE_DAYS=7             # how far back the first issue reaches
 export OPENOUTNEWS_DEDUP_LOOKBACK_DAYS=28   # how far back "already sent" reaches

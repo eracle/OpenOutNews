@@ -2,6 +2,8 @@
 from datetime import date
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from openoutnews import fetch
 
 _RSS = """<?xml version="1.0"?>
@@ -60,6 +62,22 @@ def test_fetch_day_sends_the_dated_query():
 
     url = urlopen.call_args.args[0].full_url
     assert "q=llama.cpp%20after%3A2026-10-10%20before%3A2026-10-11" in url
+
+
+def test_feed_url_defaults_to_the_us_english_edition(monkeypatch):
+    monkeypatch.delenv("OPENOUTNEWS_EDITION", raising=False)
+    assert fetch.feed_url("wine").endswith("?q=wine&hl=en-US&gl=US&ceid=US:en")
+
+
+def test_feed_url_takes_the_bare_language_outside_english(monkeypatch):
+    monkeypatch.setenv("OPENOUTNEWS_EDITION", "IT:it")
+    assert fetch.feed_url("vino").endswith("?q=vino&hl=it&gl=IT&ceid=IT:it")
+
+
+def test_a_malformed_edition_is_refused(monkeypatch):
+    monkeypatch.setenv("OPENOUTNEWS_EDITION", "italy")
+    with pytest.raises(ValueError, match="COUNTRY:language"):
+        fetch.feed_url("vino")
 
 
 def test_google_day_reads_published_at_as_a_pacific_date():

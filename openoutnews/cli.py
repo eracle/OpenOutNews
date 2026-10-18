@@ -139,6 +139,11 @@ def cmd_find(n: int, *, brief_path: str | None = None, agent: bool = False,
     if not topics:
         print("OPENOUTNEWS_TOPICS is not set — nothing to fetch.", file=sys.stderr)
         return 0
+    try:
+        conf.edition()
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
 
     today = fetch.google_today()
     with store.connect() as conn:
