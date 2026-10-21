@@ -15,6 +15,9 @@ whether an article fits the newsletter's brief — see `openoutnews/ml/qualifier
 
 A CSV out, no wizard, no send step.
 
+Part of the [OpenOutreach](https://openoutreach.app/?utm_source=github&utm_medium=readme&utm_campaign=openoutnews)
+family, which runs the same engine to find B2B leads (ten free).
+
 ## Install
 
 ```bash
