@@ -63,6 +63,23 @@ def split_model_id(ai_model: str) -> tuple[str, str]:
     return provider, model
 
 
+def _accept_union_message_param() -> None:
+    """Let pydantic-ai build Anthropic messages against ``anthropic`` 2.x.
+
+    ``anthropic`` 2.0 made ``BetaMessageParam`` a ``Union`` of per-role TypedDicts, and
+    pydantic-ai still calls it as a constructor, so every request raised ``TypeError:
+    Cannot instantiate typing.Union`` (pydantic/pydantic-ai#10923). Calling a TypedDict
+    only ever built a plain dict, so ``dict`` is the same call. A no-op once pydantic-ai
+    stops calling it. OpenOutFind's ``core/llm.py`` carries the same shim.
+    """
+    import typing
+
+    import pydantic_ai.models.anthropic as pydantic_ai_anthropic
+
+    if typing.get_origin(pydantic_ai_anthropic.BetaMessageParam) is typing.Union:
+        pydantic_ai_anthropic.BetaMessageParam = dict
+
+
 @functools.cache
 def _model(ai_model: str, api_key: str):
     provider, model = split_model_id(ai_model)
@@ -70,6 +87,7 @@ def _model(ai_model: str, api_key: str):
         from anthropic import AsyncAnthropic
         from pydantic_ai.models.anthropic import AnthropicModel
         from pydantic_ai.providers.anthropic import AnthropicProvider
+        _accept_union_message_param()
         client = AsyncAnthropic(api_key=api_key, max_retries=_MAX_RETRIES)
         return AnthropicModel(model, provider=AnthropicProvider(anthropic_client=client))
 

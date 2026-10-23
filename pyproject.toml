@@ -39,6 +39,9 @@ dependencies = [
     # 2.57 is the first that knows Claude Sonnet 5.5 and Opus 5.5 reject a forced tool call,
     # as in OpenOutFind.
     "pydantic-ai-slim[anthropic,openai]>=2.57,<3",
+    # pydantic-ai's extra leaves `anthropic` unbounded, so the next major arrives
+    # unannounced. 2.x needs the shim in `llm.py` (`_accept_union_message_param`).
+    "anthropic>=2,<3",
     "jinja2>=3.1,<4",
 ]
 
