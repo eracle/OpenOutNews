@@ -2,3 +2,7 @@ __pycache__/
 *.pyc
 .venv/
 *.egg-info/
+
+# Nothing here consumes a lockfile: installs read pyproject (`uv pip install -e ".[dev]"`).
+# A committed uv.lock would only be a second dependency source to keep in step with it.
+uv.lock
